@@ -30,9 +30,9 @@
     <table class="table">
         <thead>
         <tr class="table-dark">
-            <th>번호</th>
-            <th>제목</th>
-            <th>작성일시</th>
+            <th>ㅎ2</th>
+            <th>요</th>
+            <th>ㅋㅋ</th>
         </tr>
         </thead>
         <tbody>
