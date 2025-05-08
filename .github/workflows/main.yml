@@ -1,0 +1,59 @@
+name: fast CI/CD
+
+
+on: # on 언제 action을 동작시킬지
+  push: # push가 됐을때 동작시키겠다.
+    branches: [main] # 대상 브랜치.
+    paths-ignore: # push 이벤트가 발생해도 무시할 파일.
+    - '.gitignore'
+    - '.dockerignore'
+jobs:
+  ci:
+    runs-on: ubuntu-latest  #깃액션이 동작하는 환경
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1 #가장 최근 commit의 히스토리만 가져옴.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-northeast-2
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Set Variables
+        id: set-var
+        run: |
+          echo "ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}" >> $GITHUB_ENV
+          echo "ECR_REPOSITORY=frontend" >> $GITHUB_ENV #본인 ecr레포에 맞게 수정
+          echo "IMAGE_TAG=${{ github.run_number }}" >> $GITHUB_ENV
+          echo "GIT_EMAIL=iiilee0907@naver.com" >> $GITHUB_ENV
+          echo "GIT_NAME=pcmin929" >> $GITHUB_ENV
+      - name: Docker Image Build
+        id: build-image
+        run: |
+          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
+      - name: Docker image Push
+        id: push-image
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+      - name: Checkout Deployment Repository
+        uses: actions/checkout@v4
+        with:
+          repository: yeeesol/dep #본인에 맞게 수정
+          ref: main  # branch
+          token: ${{ secrets.GH_TOKEN }}
+      - name: k8s manifest update
+        run: |
+          sed -i "s@ \
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:.*@ \
+          image: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}@g" deploy.yml
+      - name: Commit and Push
+        run: |
+          git config user.email ${{ env.GIT_EMAIL }}
+          git config user.name ${{ env.GIT_NAME }}
+          git add deploy.yml
+          git commit -m "Update image tag"
+          git push origin main
